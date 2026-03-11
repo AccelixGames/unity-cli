@@ -4,6 +4,14 @@ Command-line tool to control Unity Editor directly from the terminal. Built for 
 
 **No MCP protocol. No Python relay. No runtime dependencies. Just a single binary.**
 
+## Why not MCP?
+
+MCP-based Unity integrations ship tens of thousands of lines of code across Python relays, WebSocket bridges, JSON-RPC protocol layers, and runtime dependencies. The result is a system that's hard to install, hard to debug, and impossible to understand without reading the source.
+
+This project takes the opposite approach. The entire CLI is ~500 lines of Go. The Unity-side connector is ~1,500 lines of C#. There is no protocol layer, no relay process, no virtual environment — just an HTTP POST from a binary to Unity's built-in HttpListener.
+
+If you can run a shell command, you can control Unity. That's it.
+
 ## Install
 
 ### Linux / macOS
