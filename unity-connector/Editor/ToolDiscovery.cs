@@ -56,7 +56,7 @@ namespace UnityCliConnector
 
         static void TryRegister(Type type)
         {
-            if (type.IsAbstract == false && type.IsClass == false) return;
+            if (type.IsAbstract || type.IsClass == false) return;
 
             string name = null;
             string description = "";
@@ -106,7 +106,7 @@ namespace UnityCliConnector
             }).Cast<object>().ToList();
         }
 
-        static List<object> GetParameterSchema(Type paramsType)
+        public static List<object> GetParameterSchema(Type paramsType)
         {
             if (paramsType == null) return new List<object>();
 

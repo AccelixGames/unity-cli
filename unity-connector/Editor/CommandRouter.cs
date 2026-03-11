@@ -29,7 +29,7 @@ namespace UnityCliConnector
                     name = info.Name,
                     description = info.Description,
                     group = info.Group,
-                    parameters = ToolDiscovery.GetToolSchemas(),
+                    parameters = ToolDiscovery.GetParameterSchema(info.ParametersType),
                 });
             }
 

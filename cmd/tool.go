@@ -27,7 +27,9 @@ func toolCmd(args []string, send sendFn) (*client.CommandResponse, error) {
 
 		params := map[string]interface{}{}
 		if raw, ok := flags["params"]; ok {
-			json.Unmarshal([]byte(raw), &params)
+			if err := json.Unmarshal([]byte(raw), &params); err != nil {
+				return nil, fmt.Errorf("invalid JSON in --params: %w", err)
+			}
 		}
 
 		return send(name, params)

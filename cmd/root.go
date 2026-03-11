@@ -70,7 +70,7 @@ func Execute() error {
 	case "editor":
 		resp, err = editorCmd(subArgs, send)
 	case "console":
-		resp, err = consoleCmd(send)
+		resp, err = consoleCmd(subArgs, send)
 	case "exec":
 		resp, err = execCmd(subArgs, send)
 	case "query":
@@ -140,9 +140,6 @@ func extractCommandArgs(args []string) []string {
 			continue
 		}
 		if a == "--json" {
-			continue
-		}
-		if len(a) > 2 && a[:2] == "--" {
 			continue
 		}
 		result = append(result, a)
