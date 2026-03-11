@@ -50,6 +50,8 @@ func Execute() error {
 	case "version", "--version", "-v":
 		fmt.Println("unity-cli " + Version)
 		return nil
+	case "update":
+		return updateCmd(subArgs)
 	}
 
 	// Parse remaining flags
@@ -213,6 +215,10 @@ Custom Tools:
   tool call <name> --params '{"key":"val"}'
                                 Call a tool with JSON parameters
   tool help <name>              Show tool description
+
+Update:
+  update                        Update to the latest version
+  update --check                Check for updates without installing
 
 Global Options:
   --port <N>          Connect to specific Unity port (skip auto-discovery)
