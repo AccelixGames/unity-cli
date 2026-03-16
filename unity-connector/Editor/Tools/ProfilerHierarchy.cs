@@ -38,23 +38,21 @@ namespace UnityCliConnector.Tools
             if (ProfilerDriver.enabled == false && ProfilerDriver.lastFrameIndex < 0)
                 return new ErrorResponse("Profiler has no captured data. Enable profiler and capture frames first.");
 
-            var frameIndex = parameters["frame"]?.Value<int>() ?? -1;
+            var p = new ToolParams(parameters);
+
+            var frameIndex = p.GetInt("frame", -1).Value;
             if (frameIndex < 0) frameIndex = ProfilerDriver.lastFrameIndex;
             if (frameIndex < ProfilerDriver.firstFrameIndex || frameIndex > ProfilerDriver.lastFrameIndex)
                 return new ErrorResponse(
                     $"Frame {frameIndex} out of range [{ProfilerDriver.firstFrameIndex}..{ProfilerDriver.lastFrameIndex}]");
 
-            var threadIndex = parameters["thread_index"]?.Value<int>()
-                ?? parameters["threadIndex"]?.Value<int>() ?? 0;
-            var parentIdToken = parameters["parent_id"] ?? parameters["parentId"];
-            var minTime = parameters["min_time"]?.Value<float>()
-                ?? parameters["minTime"]?.Value<float>() ?? 0f;
-            var sortBy = (parameters["sort_by"]?.Value<string>()
-                ?? parameters["sortBy"]?.Value<string>() ?? "total").ToLowerInvariant();
-            var maxItems = parameters["max_items"]?.Value<int>()
-                ?? parameters["maxItems"]?.Value<int>() ?? 30;
+            var threadIndex = p.GetInt("threadIndex", 0).Value;
+            var parentIdToken = p.GetRaw("parentId");
+            var minTime = p.GetFloat("minTime", 0f).Value;
+            var sortBy = (p.Get("sortBy", "total")).ToLowerInvariant();
+            var maxItems = p.GetInt("maxItems", 30).Value;
             if (maxItems <= 0) maxItems = 30;
-            var depth = parameters["depth"]?.Value<int>() ?? 1;
+            var depth = p.GetInt("depth", 1).Value;
             if (depth <= 0) depth = 999;
 
             int sortColumn;

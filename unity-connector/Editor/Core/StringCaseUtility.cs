@@ -20,7 +20,7 @@ namespace UnityCliConnector
             var parts = str.Split('_');
             var first = parts[0];
             var rest = string.Concat(parts.Skip(1).Select(part =>
-                string.IsNullOrEmpty(part) ? "" : char.ToUpperInvariant(part[0]) + part.Substring(1)));
+                part.Length == 0 ? "" : char.ToUpperInvariant(part[0]) + (part.Length > 1 ? part.Substring(1) : "")));
 
             return first + rest;
         }

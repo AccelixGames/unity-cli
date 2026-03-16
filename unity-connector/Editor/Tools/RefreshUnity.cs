@@ -26,17 +26,11 @@ namespace UnityCliConnector.Tools
             string scope = @params?["scope"]?.ToString() ?? "all";
             string compile = @params?["compile"]?.ToString() ?? "none";
 
-            bool refreshTriggered = false;
             bool compileRequested = false;
 
-            bool shouldRefresh = string.Equals(mode, "force", StringComparison.OrdinalIgnoreCase)
-                                 || string.Equals(mode, "if_dirty", StringComparison.OrdinalIgnoreCase);
-
-            if (shouldRefresh && !string.Equals(scope, "scripts", StringComparison.OrdinalIgnoreCase))
-            {
-                AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-                refreshTriggered = true;
-            }
+            AssetDatabase.Refresh(string.Equals(mode, "force", StringComparison.OrdinalIgnoreCase)
+                ? ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport
+                : ImportAssetOptions.ForceSynchronousImport);
 
             if (string.Equals(compile, "request", StringComparison.OrdinalIgnoreCase))
             {
@@ -45,15 +39,9 @@ namespace UnityCliConnector.Tools
                 compileRequested = true;
             }
 
-            if (string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase) && !refreshTriggered)
-            {
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-                refreshTriggered = true;
-            }
-
             return new SuccessResponse("Refresh requested.", new
             {
-                refresh_triggered = refreshTriggered,
+                refresh_triggered = true,
                 compile_requested = compileRequested,
             });
         }

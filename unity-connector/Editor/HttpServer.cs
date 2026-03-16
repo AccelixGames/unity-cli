@@ -125,10 +125,7 @@ namespace UnityCliConnector
         static void ProcessQueue()
         {
             while (s_Queue.TryDequeue(out var item))
-            {
-                var captured = item;
-                ProcessItem(captured);
-            }
+                ProcessItem(item);
         }
 
         static async void ProcessItem(WorkItem item)

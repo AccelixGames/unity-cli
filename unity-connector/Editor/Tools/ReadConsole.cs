@@ -60,7 +60,9 @@ namespace UnityCliConnector.Tools
 
         public static object HandleCommand(JObject @params)
         {
-            if (_startGettingEntriesMethod == null || _getEntryMethod == null)
+            if (_startGettingEntriesMethod == null || _endGettingEntriesMethod == null ||
+                _clearMethod == null || _getCountMethod == null || _getEntryMethod == null ||
+                _modeField == null || _messageField == null)
                 return new ErrorResponse("ReadConsole failed to initialize (reflection error).");
 
             if (@params == null)

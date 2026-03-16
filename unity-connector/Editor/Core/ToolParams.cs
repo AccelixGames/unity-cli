@@ -32,6 +32,14 @@ namespace UnityCliConnector
             return int.TryParse(str, out var result) ? result : defaultValue;
         }
 
+        public float? GetFloat(string key, float? defaultValue = null)
+        {
+            var str = GetString(key);
+            if (string.IsNullOrEmpty(str)) return defaultValue;
+            return float.TryParse(str, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
+        }
+
         public bool GetBool(string key, bool defaultValue = false)
         {
             return ParamCoercion.CoerceBool(GetToken(key), defaultValue);
@@ -56,9 +64,12 @@ namespace UnityCliConnector
 
             var camelKey = StringCaseUtility.ToCamelCase(key);
             if (camelKey != key)
+            {
                 token = _params[camelKey];
+                if (token != null) return token;
+            }
 
-            return token;
+            return null;
         }
 
         private string GetString(string key)
