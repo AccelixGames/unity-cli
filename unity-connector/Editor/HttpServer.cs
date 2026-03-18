@@ -171,7 +171,25 @@ namespace UnityCliConnector
             var response = context.Response;
 
             response.ContentType = "application/json";
-            response.Headers.Add("Access-Control-Allow-Origin", "*");
+
+            // Block browser cross-origin requests — CLI uses Go HTTP client (not subject to CORS)
+            if (request.HttpMethod == "OPTIONS")
+            {
+                response.StatusCode = 204;
+                response.Close();
+                return;
+            }
+
+            var origin = request.Headers["Origin"];
+            if (origin != null)
+            {
+                response.StatusCode = 403;
+                var buf = Encoding.UTF8.GetBytes("{\"error\":\"Browser requests are not allowed\"}");
+                response.ContentLength64 = buf.Length;
+                await response.OutputStream.WriteAsync(buf, 0, buf.Length);
+                response.Close();
+                return;
+            }
 
             object result;
 
