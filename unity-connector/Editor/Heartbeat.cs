@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using UnityEditor;
-using UnityEditor.Compilation;
 using UnityEngine;
 
 namespace UnityCliConnector
@@ -27,7 +26,6 @@ namespace UnityCliConnector
             EditorApplication.quitting += Cleanup;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += () => { s_ForcedState = null; s_LastWrite = 0; };
-            CompilationPipeline.compilationStarted += _ => WriteState("compiling");
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
         }
 
