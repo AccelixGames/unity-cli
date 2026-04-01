@@ -1,12 +1,12 @@
 {
-  "name": "com.youngwoocho02.unity-cli-connector",
+  "name": "com.accelixgames.unity-cli-connector",
   "version": "0.3.6",
   "displayName": "Unity CLI Connector",
   "description": "HTTP bridge for unity-cli. Receives CLI commands and dispatches to registered tool handlers.",
   "unity": "6000.0",
   "author": {
-    "name": "DevBookOfArray",
-    "url": "https://www.youtube.com/@DevBookOfArray"
+    "name": "AccelixGames",
+    "url": "https://github.com/AccelixGames"
   },
   "keywords": ["cli", "tools", "editor"],
   "type": "library",
