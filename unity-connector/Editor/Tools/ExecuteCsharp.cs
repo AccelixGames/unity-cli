@@ -40,6 +40,9 @@ namespace UnityCliConnector.Tools
 
             [ToolParameter("Path to csc compiler (csc.dll or csc.exe). Auto-detected if omitted.")]
             public string Csc { get; set; }
+
+            [ToolParameter("Path to dotnet runtime. Auto-detected if omitted.")]
+            public string Dotnet { get; set; }
         }
 
         public static object HandleCommand(JObject parameters)
@@ -61,7 +64,8 @@ namespace UnityCliConnector.Tools
             }
 
             var cscPath = p.Get("csc");
-            return CompileAndExecute(BuildSource(code, extraUsings), cscPath);
+            var dotnetPath = p.Get("dotnet");
+            return CompileAndExecute(BuildSource(code, extraUsings), cscPath, dotnetPath);
         }
 
         private static string BuildSource(string code, List<string> extraUsings)
@@ -81,7 +85,7 @@ namespace UnityCliConnector.Tools
             return sb.ToString();
         }
 
-        private static object CompileAndExecute(string source, string cscOverride = null)
+        private static object CompileAndExecute(string source, string cscOverride = null, string dotnetOverride = null)
         {
             var utf8 = new UTF8Encoding(false);
             var tmpDir = Path.Combine(Path.GetTempPath(), "unity-cli-exec");
@@ -118,7 +122,7 @@ namespace UnityCliConnector.Tools
 
                 File.WriteAllText(rspFile, rsp.ToString(), utf8);
 
-                var (exe, args) = FindCsc(rspFile, cscOverride);
+                var (exe, args) = FindCsc(rspFile, cscOverride, dotnetOverride);
                 if (exe == null)
                     return new ErrorResponse(
                         "Cannot find csc compiler under: " +
@@ -176,7 +180,7 @@ namespace UnityCliConnector.Tools
             }
         }
 
-        private static (string exe, string args) FindCsc(string rspFile, string cscOverride = null)
+        private static (string exe, string args) FindCsc(string rspFile, string cscOverride = null, string dotnetOverride = null)
         {
             var content = EditorApplication.applicationContentsPath;
             var rspArg = $"@\"{rspFile}\"";
@@ -187,7 +191,7 @@ namespace UnityCliConnector.Tools
 
             if (cscDll != null)
             {
-                var dotnet = FindDotnet();
+                var dotnet = FindDotnet(dotnetOverride);
                 if (dotnet != null)
                     return (dotnet, $"exec \"{cscDll}\" {rspArg}");
             }
@@ -217,23 +221,14 @@ namespace UnityCliConnector.Tools
             return null;
         }
 
-        private static string FindDotnet()
+        private static string FindDotnet(string dotnetOverride = null)
         {
-            var content = EditorApplication.applicationContentsPath;
-            var ext = Application.platform == RuntimePlatform.WindowsEditor ? ".exe" : "";
+            if (!string.IsNullOrEmpty(dotnetOverride))
+                return dotnetOverride;
 
-            var candidates = new[]
-            {
-                Path.Combine(content, "NetCoreRuntime", $"dotnet{ext}"),
-                Path.Combine(content, "DotNetRuntimeDownloaded", $"dotnet{ext}"),
-                $"dotnet{ext}",
-            };
-
-            foreach (var c in candidates)
-                if (File.Exists(c) || c == candidates[candidates.Length - 1])
-                    return c;
-
-            return null;
+            var name = "dotnet" + (Application.platform == RuntimePlatform.WindowsEditor ? ".exe" : "");
+            var found = SearchFile(EditorApplication.applicationContentsPath, name);
+            return found ?? name;
         }
 
         private static string FormatErrors(string raw)

@@ -80,6 +80,22 @@ CLI(Go)와 Connector(C#)는 독립 버전. 변경된 쪽만 올린다.
 
 Commit all unstaged changes before finishing. Unrelated changes should be committed separately.
 
+## 실행 규칙
+
+`go run .`은 테스트 목적일 때만 사용. CLI 기능 실행은 반드시 설치된 바이너리 `unity-cli`로.
+
+## 릴리스 플로우
+
+"커밋하고 올려" 지시 시 아래를 한 번에 수행:
+
+1. Verification 전부 실행
+2. 변경된 쪽 버전 갱신 (Connector package.json / CLI tag)
+3. 커밋 + push
+4. CLI 변경 있으면 새 tag push
+5. CI(CI + Release) 완료 대기 (`gh run watch --exit-status`, background)
+6. `go clean -cache -testcache`로 빌드/테스트 캐시 전부 정리
+7. 둘 다 성공하면 `unity-cli update`로 설치된 CLI 업데이트
+
 ## CI
 
 - `push/PR → main`: build, vet, test, lint, format

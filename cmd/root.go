@@ -414,6 +414,7 @@ Use 'return' to get output. Add --usings for types outside default namespaces.
 Options:
   --usings <ns1,ns2>   Add extra using directives
   --csc <path>         Path to csc compiler (csc.dll or csc.exe). Auto-detected if omitted.
+  --dotnet <path>      Path to dotnet runtime. Auto-detected if omitted.
 
 Default usings: System, System.Collections.Generic, System.IO, System.Linq,
   System.Reflection, System.Threading.Tasks, UnityEngine,
