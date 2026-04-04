@@ -220,20 +220,28 @@ namespace UnityCliConnector.Tools
         private static string FindDotnet()
         {
             var content = EditorApplication.applicationContentsPath;
-            var ext = Application.platform == RuntimePlatform.WindowsEditor ? ".exe" : "";
+            var name = Application.platform == RuntimePlatform.WindowsEditor ? "dotnet.exe" : "dotnet";
 
-            var candidates = new[]
+            // 1. Unity 번들 dotnet — 재귀 탐색 (csc.dll과 동일 방식)
+            //    하드코딩 경로는 Unity 버전마다 달라짐 (e.g. NetCoreRuntime/ vs Resources/Scripting/NetCoreRuntime/)
+            var found = SearchFile(content, name);
+            if (found != null) return found;
+
+            // 2. macOS well-known paths (GUI앱은 shell PATH를 상속받지 않음)
+            if (Application.platform != RuntimePlatform.WindowsEditor)
             {
-                Path.Combine(content, "NetCoreRuntime", $"dotnet{ext}"),
-                Path.Combine(content, "DotNetRuntimeDownloaded", $"dotnet{ext}"),
-                $"dotnet{ext}",
-            };
+                var macPaths = new[]
+                {
+                    "/usr/local/share/dotnet/dotnet",
+                    "/opt/homebrew/bin/dotnet",
+                    "/usr/local/bin/dotnet",
+                };
+                foreach (var p in macPaths)
+                    if (File.Exists(p)) return p;
+            }
 
-            foreach (var c in candidates)
-                if (File.Exists(c) || c == candidates[candidates.Length - 1])
-                    return c;
-
-            return null;
+            // 3. 최후 수단 — 시스템 PATH (Windows에서는 동작, macOS GUI에서는 대부분 실패)
+            return name;
         }
 
         private static string FormatErrors(string raw)
