@@ -319,6 +319,13 @@ Reserialize:
     reserialize Assets/Scenes/Main.unity
     reserialize Assets/Prefabs/A.prefab Assets/Prefabs/B.prefab
 
+Diff Prefab:
+  diff_prefab <pathA> <pathB>    Compare two prefabs (hierarchy, components, fields)
+  diff_prefab ... --subtree X    Compare only subtree named X
+  diff_prefab ... --depth 5      SerializedProperty recursion depth (default: 3)
+  diff_prefab ... --diff_only false  Show matching fields too (default: diffs only)
+  diff_prefab ... --mapping "A=B,C=D"  Explicit child name mappings
+
 Tests:
   test                            Run EditMode tests (default)
   test --mode PlayMode            Run PlayMode tests
@@ -552,6 +559,46 @@ Options:
 Examples:
   unity-cli update
   unity-cli update --check
+`)
+	case "diff_prefab", "diff-prefab":
+		fmt.Print(`Usage: unity-cli diff_prefab <pathA> <pathB> [options]
+
+Compare two prefab assets: hierarchy structure, component presence, and
+serialized field values. Useful for verifying new prefabs match a legacy
+template.
+
+Options:
+  --subtree <name>       Navigate to this child transform in both prefabs
+                         before comparing. Useful for comparing subtrees.
+  --depth <N>            Max SerializedProperty recursion depth (default: 3)
+  --diff_only <bool>     Show only differences (default: true)
+                         Set to false to include matching fields.
+  --mapping <pairs>      Explicit child name mappings for different names:
+                         "NameInA=NameInB,OtherA=OtherB"
+
+Name Matching:
+  Children are matched in 3 passes:
+    1. Exact name match
+    2. Explicit --mapping overrides
+    3. Fuzzy match: strip "(Prefix) " patterns
+       e.g. "(Storage) Ingredient-Up" and "(Storage) IngredientStorage"
+       both become "Ingredient-Up" / "IngredientStorage" (no match unless equal)
+
+Output:
+  JSON with three sections:
+    hierarchy  — GameObjects only in A or B, plus fuzzy match info
+    components — Component type presence diffs
+    fields     — SerializedProperty value diffs per matched component
+
+Skipped Fields:
+  m_Script, m_GameObject, m_ObjectHideFlags, m_PrefabInstance,
+  m_PrefabAsset, m_Father, m_Children, m_RootOrder, m_LocalEulerAnglesHint
+
+Examples:
+  unity-cli diff_prefab Assets/Prefabs/CookStation.prefab Assets/Prefabs/Production_Blender.prefab
+  unity-cli diff_prefab Assets/A.prefab Assets/B.prefab --subtree "(Handler) Player"
+  unity-cli diff_prefab Assets/A.prefab Assets/B.prefab --mapping "Interaction-Cook=ProductionHandler"
+  unity-cli diff_prefab Assets/A.prefab Assets/B.prefab --diff_only false --depth 5
 `)
 	case "custom-tools", "custom", "tools":
 		fmt.Print(`How to write custom tools for unity-cli
