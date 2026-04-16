@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -51,36 +52,36 @@ namespace UnityCliConnector.Tools
 
         private static object Create(ToolParams p)
         {
-            var goName = p.Get("gameobject", "");
-            var path = p.Get("path", "");
+            var goResult = p.GetRequired("gameobject", "'gameobject' parameter required for create.");
+            if (!goResult.IsSuccess) return new ErrorResponse(goResult.ErrorMessage);
+            var pathResult = p.GetRequired("path", "'path' parameter required for create.");
+            if (!pathResult.IsSuccess) return new ErrorResponse(pathResult.ErrorMessage);
 
-            if (string.IsNullOrEmpty(goName))
-                return new ErrorResponse("'gameobject' parameter required for create.");
-            if (string.IsNullOrEmpty(path))
-                return new ErrorResponse("'path' parameter required for create.");
-
-            var go = UnityEngine.GameObject.Find(goName)
-                     ?? Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None)
-                         .FirstOrDefault(g => g.name == goName);
+            var go = FindGameObject(goResult.Value);
             if (go == null)
-                return new ErrorResponse($"GameObject not found: {goName}");
+                return new ErrorResponse($"GameObject not found: {goResult.Value}");
 
-            var prefab = PrefabUtility.SaveAsPrefabAssetAndConnect(go, path, InteractionMode.UserAction);
-            if (prefab == null)
-                return new ErrorResponse($"Failed to create prefab at {path}");
-
-            return new SuccessResponse($"Created prefab at '{path}' from '{goName}'", new { path, name = prefab.name });
+            try
+            {
+                var prefab = PrefabUtility.SaveAsPrefabAssetAndConnect(go, pathResult.Value, InteractionMode.AutomatedAction);
+                if (prefab == null)
+                    return new ErrorResponse($"Failed to create prefab at {pathResult.Value}");
+                return new SuccessResponse($"Created prefab at '{pathResult.Value}' from '{go.name}'", new { path = pathResult.Value, name = prefab.name });
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse($"Failed to create prefab: {ex.Message}");
+            }
         }
 
         private static object Instantiate(ToolParams p)
         {
-            var path = p.Get("path", "");
-            if (string.IsNullOrEmpty(path))
-                return new ErrorResponse("'path' parameter required for instantiate.");
+            var pathResult = p.GetRequired("path", "'path' parameter required for instantiate.");
+            if (!pathResult.IsSuccess) return new ErrorResponse(pathResult.ErrorMessage);
 
-            var prefab = AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>(path);
+            var prefab = AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>(pathResult.Value);
             if (prefab == null)
-                return new ErrorResponse($"Prefab not found at: {path}");
+                return new ErrorResponse($"Prefab not found at: {pathResult.Value}");
 
             var instance = (UnityEngine.GameObject)PrefabUtility.InstantiatePrefab(prefab);
             if (instance == null)
@@ -102,51 +103,60 @@ namespace UnityCliConnector.Tools
             if (!string.IsNullOrEmpty(pos))
             {
                 var parts = pos.Split(',');
-                if (parts.Length == 3)
+                if (parts.Length != 3)
+                    return new ErrorResponse("Position requires 3 comma-separated floats (e.g. '1.0,2.0,3.0').");
+                try
+                {
                     instance.transform.localPosition = new Vector3(
                         float.Parse(parts[0].Trim()),
                         float.Parse(parts[1].Trim()),
                         float.Parse(parts[2].Trim()));
+                }
+                catch (FormatException)
+                {
+                    return new ErrorResponse($"Failed to parse position '{pos}'. Expected 3 comma-separated floats.");
+                }
             }
 
             Undo.RegisterCreatedObjectUndo(instance, $"Instantiate {prefab.name}");
-            return new SuccessResponse($"Instantiated '{instance.name}' from '{path}'",
-                new { name = instance.name, path, position = instance.transform.position.ToString() });
+            return new SuccessResponse($"Instantiated '{instance.name}' from '{pathResult.Value}'",
+                new { name = instance.name, path = pathResult.Value, position = instance.transform.position.ToString() });
         }
 
         private static object Apply(ToolParams p)
         {
-            var goName = p.Get("gameobject", "");
-            if (string.IsNullOrEmpty(goName))
-                return new ErrorResponse("'gameobject' parameter required for apply.");
+            var goResult = p.GetRequired("gameobject", "'gameobject' parameter required for apply.");
+            if (!goResult.IsSuccess) return new ErrorResponse(goResult.ErrorMessage);
 
-            var go = UnityEngine.GameObject.Find(goName)
-                     ?? Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None)
-                         .FirstOrDefault(g => g.name == goName);
+            var go = FindGameObject(goResult.Value);
             if (go == null)
-                return new ErrorResponse($"GameObject not found: {goName}");
+                return new ErrorResponse($"GameObject not found: {goResult.Value}");
 
             if (!PrefabUtility.IsPartOfPrefabInstance(go))
-                return new ErrorResponse($"'{goName}' is not a prefab instance.");
+                return new ErrorResponse($"'{goResult.Value}' is not a prefab instance.");
 
-            PrefabUtility.ApplyPrefabInstance(go, InteractionMode.UserAction);
-            return new SuccessResponse($"Applied overrides from '{goName}' to prefab.");
+            try
+            {
+                PrefabUtility.ApplyPrefabInstance(go, InteractionMode.AutomatedAction);
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse($"Failed to apply prefab overrides: {ex.Message}");
+            }
+            return new SuccessResponse($"Applied overrides from '{go.name}' to prefab.");
         }
 
         private static object GetOverrides(ToolParams p)
         {
-            var goName = p.Get("gameobject", "");
-            if (string.IsNullOrEmpty(goName))
-                return new ErrorResponse("'gameobject' parameter required.");
+            var goResult = p.GetRequired("gameobject", "'gameobject' parameter required for get_overrides.");
+            if (!goResult.IsSuccess) return new ErrorResponse(goResult.ErrorMessage);
 
-            var go = UnityEngine.GameObject.Find(goName)
-                     ?? Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None)
-                         .FirstOrDefault(g => g.name == goName);
+            var go = FindGameObject(goResult.Value);
             if (go == null)
-                return new ErrorResponse($"GameObject not found: {goName}");
+                return new ErrorResponse($"GameObject not found: {goResult.Value}");
 
             if (!PrefabUtility.IsPartOfPrefabInstance(go))
-                return new ErrorResponse($"'{goName}' is not a prefab instance.");
+                return new ErrorResponse($"'{goResult.Value}' is not a prefab instance.");
 
             var mods = PrefabUtility.GetPropertyModifications(go);
             if (mods == null || mods.Length == 0)
@@ -160,6 +170,13 @@ namespace UnityCliConnector.Tools
             }).ToArray();
 
             return new SuccessResponse($"Found {overrides.Length} overrides.", overrides);
+        }
+
+        private static UnityEngine.GameObject FindGameObject(string name)
+        {
+            return UnityEngine.GameObject.Find(name)
+                   ?? Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None)
+                       .FirstOrDefault(g => g.name == name);
         }
     }
 }

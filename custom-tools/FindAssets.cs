@@ -83,10 +83,11 @@ namespace UnityCliConnector.Tools
 
         private static object GetInfo(ToolParams p)
         {
-            var path = p.Get("path", "");
-            if (string.IsNullOrEmpty(path))
-                return new ErrorResponse("'path' parameter required.");
+            var pathResult = p.GetRequired("path", "'path' parameter required.");
+            if (!pathResult.IsSuccess)
+                return new ErrorResponse(pathResult.ErrorMessage);
 
+            var path = pathResult.Value;
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
             if (asset == null)
                 return new ErrorResponse($"Asset not found: {path}");
@@ -94,7 +95,19 @@ namespace UnityCliConnector.Tools
             var guid = AssetDatabase.AssetPathToGUID(path);
             var type = asset.GetType();
             var labels = AssetDatabase.GetLabels(asset);
-            var fileInfo = new FileInfo(path);
+
+            long fileSize = 0;
+            string lastModified = "N/A";
+            try
+            {
+                var fileInfo = new FileInfo(path);
+                if (fileInfo.Exists)
+                {
+                    fileSize = fileInfo.Length;
+                    lastModified = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+            }
+            catch (System.Exception) { }
 
             var info = new
             {
@@ -103,11 +116,10 @@ namespace UnityCliConnector.Tools
                 type = type.FullName,
                 guid,
                 labels,
-                fileSize = fileInfo.Exists ? fileInfo.Length : 0,
-                lastModified = fileInfo.Exists ? fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss") : "N/A"
+                fileSize,
+                lastModified
             };
 
-            // Add extra info for specific types
             if (asset is GameObject go)
             {
                 var components = go.GetComponents<Component>()
@@ -123,50 +135,68 @@ namespace UnityCliConnector.Tools
 
         private static object GetLabels(ToolParams p)
         {
-            var path = p.Get("path", "");
-            if (string.IsNullOrEmpty(path))
-                return new ErrorResponse("'path' parameter required.");
+            var pathResult = p.GetRequired("path", "'path' parameter required.");
+            if (!pathResult.IsSuccess)
+                return new ErrorResponse(pathResult.ErrorMessage);
 
-            var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            var asset = AssetDatabase.LoadMainAssetAtPath(pathResult.Value);
             if (asset == null)
-                return new ErrorResponse($"Asset not found: {path}");
+                return new ErrorResponse($"Asset not found: {pathResult.Value}");
 
             var labels = AssetDatabase.GetLabels(asset);
-            return new SuccessResponse($"Labels for '{path}'", labels);
+            return new SuccessResponse($"Labels for '{pathResult.Value}'", labels);
         }
 
         private static object SetLabels(ToolParams p)
         {
-            var path = p.Get("path", "");
-            var labelsStr = p.Get("labels", "");
-            if (string.IsNullOrEmpty(path))
-                return new ErrorResponse("'path' parameter required.");
-            if (string.IsNullOrEmpty(labelsStr))
-                return new ErrorResponse("'labels' parameter required.");
+            var pathResult = p.GetRequired("path", "'path' parameter required.");
+            if (!pathResult.IsSuccess)
+                return new ErrorResponse(pathResult.ErrorMessage);
 
-            var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            var labelsResult = p.GetRequired("labels", "'labels' parameter required.");
+            if (!labelsResult.IsSuccess)
+                return new ErrorResponse(labelsResult.ErrorMessage);
+
+            var asset = AssetDatabase.LoadMainAssetAtPath(pathResult.Value);
             if (asset == null)
-                return new ErrorResponse($"Asset not found: {path}");
+                return new ErrorResponse($"Asset not found: {pathResult.Value}");
 
-            var labels = labelsStr.Split(',').Select(l => l.Trim()).ToArray();
+            var labels = labelsResult.Value.Split(',').Select(l => l.Trim()).ToArray();
             AssetDatabase.SetLabels(asset, labels);
-            return new SuccessResponse($"Set {labels.Length} labels on '{path}'", labels);
+            return new SuccessResponse($"Set {labels.Length} labels on '{pathResult.Value}'", labels);
         }
 
         private static object GetDependencies(ToolParams p)
         {
-            var path = p.Get("path", "");
-            if (string.IsNullOrEmpty(path))
-                return new ErrorResponse("'path' parameter required.");
+            var pathResult = p.GetRequired("path", "'path' parameter required.");
+            if (!pathResult.IsSuccess)
+                return new ErrorResponse(pathResult.ErrorMessage);
 
-            var deps = AssetDatabase.GetDependencies(path, false);
-            var results = deps.Where(d => d != path).Select(d => new
+            var max = p.GetInt("max_results", 30) ?? 30;
+            var path = pathResult.Value;
+
+            string[] deps;
+            try
+            {
+                deps = AssetDatabase.GetDependencies(path, false);
+            }
+            catch (System.Exception ex)
+            {
+                return new ErrorResponse($"Failed to get dependencies for '{path}': {ex.Message}");
+            }
+
+            var filtered = deps.Where(d => d != path).ToArray();
+            var results = filtered.Take(max).Select(d => new
             {
                 path = d,
                 type = AssetDatabase.GetMainAssetTypeAtPath(d)?.Name ?? "Unknown"
             }).ToArray();
 
-            return new SuccessResponse($"Found {results.Length} dependencies.", results);
+            var message = filtered.Length > max
+                ? $"Found {filtered.Length} dependencies (showing {results.Length})."
+                : $"Found {results.Length} dependencies.";
+
+            return new SuccessResponse(message, results);
         }
     }
 }

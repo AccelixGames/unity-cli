@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
@@ -43,6 +44,9 @@ namespace UnityCliConnector.Tools
             var height = p.GetInt("height", 512) ?? 512;
             var outputDir = p.Get("output_dir", "Temp/Screenshots");
 
+            if (width <= 0 || height <= 0)
+                return new ErrorResponse($"Width and height must be positive. Got: {width}x{height}");
+
             Vector3 focusPoint = Vector3.zero;
             if (!string.IsNullOrEmpty(targetName))
             {
@@ -52,8 +56,15 @@ namespace UnityCliConnector.Tools
                 focusPoint = target.transform.position;
             }
 
-            if (!Directory.Exists(outputDir))
-                Directory.CreateDirectory(outputDir);
+            try
+            {
+                if (!Directory.Exists(outputDir))
+                    Directory.CreateDirectory(outputDir);
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse($"Failed to create output directory '{outputDir}': {ex.Message}");
+            }
 
             var angles = new ViewAngle[]
             {
@@ -86,31 +97,44 @@ namespace UnityCliConnector.Tools
                     sceneView.Repaint();
 
                     var camera = sceneView.camera;
-                    if (camera == null) continue;
+                    if (camera == null)
+                        return new ErrorResponse($"Scene View camera is null for angle '{angle.Name}'. Ensure the Scene View is fully initialized.");
 
-                    var rt = new RenderTexture(width, height, 24);
-                    camera.targetTexture = rt;
-                    camera.Render();
+                    RenderTexture rt = null;
+                    Texture2D tex = null;
+                    try
+                    {
+                        rt = new RenderTexture(width, height, 24);
+                        if (!rt.Create())
+                        {
+                            Object.DestroyImmediate(rt);
+                            return new ErrorResponse($"Failed to create RenderTexture ({width}x{height}) for angle '{angle.Name}'.");
+                        }
 
-                    RenderTexture.active = rt;
-                    var tex = new Texture2D(width, height, TextureFormat.RGB24, false, false);
-                    tex.ReadPixels(new Rect(0, 0, (float)width, (float)height), 0, 0);
-                    tex.Apply();
+                        camera.targetTexture = rt;
+                        camera.Render();
 
-                    var bytes = tex.EncodeToPNG();
-                    var filePath = Path.Combine(outputDir, $"SceneView_{angle.Name}.png");
-                    File.WriteAllBytes(filePath, bytes);
-                    savedPaths.Add(filePath);
+                        RenderTexture.active = rt;
+                        tex = new Texture2D(width, height, TextureFormat.RGB24, false, false);
+                        tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                        tex.Apply();
 
-                    camera.targetTexture = null;
-                    RenderTexture.active = null;
-                    Object.DestroyImmediate(tex);
-                    Object.DestroyImmediate(rt);
+                        var bytes = tex.EncodeToPNG();
+                        var filePath = Path.Combine(outputDir, $"SceneView_{angle.Name}.png");
+                        File.WriteAllBytes(filePath, bytes);
+                        savedPaths.Add(filePath);
+                    }
+                    finally
+                    {
+                        camera.targetTexture = null;
+                        RenderTexture.active = null;
+                        if (tex != null) Object.DestroyImmediate(tex);
+                        if (rt != null) Object.DestroyImmediate(rt);
+                    }
                 }
             }
             finally
             {
-                // Restore original state
                 sceneView.pivot = origPivot;
                 sceneView.rotation = origRotation;
                 sceneView.size = origSize;

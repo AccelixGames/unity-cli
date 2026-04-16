@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace UnityCliConnector.Tools
 {
@@ -36,7 +36,10 @@ namespace UnityCliConnector.Tools
 
         public static object HandleCommand(JObject @params)
         {
-            var p = new ToolParams(@params ?? new JObject());
+            if (@params == null)
+                return new ErrorResponse("Parameters cannot be null.");
+
+            var p = new ToolParams(@params);
             var name = p.Get("name", "");
             var tag = p.Get("tag", "");
             var layer = p.Get("layer", "");
@@ -125,14 +128,20 @@ namespace UnityCliConnector.Tools
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 if (assembly.IsDynamic) continue;
+                Type[] types;
                 try
                 {
-                    var type = assembly.GetTypes().FirstOrDefault(t =>
-                        t.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase) &&
-                        typeof(UnityEngine.Component).IsAssignableFrom(t));
-                    if (type != null) return type;
+                    types = assembly.GetTypes();
                 }
-                catch { }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = ex.Types.Where(t => t != null).ToArray();
+                }
+
+                var match = types.FirstOrDefault(t =>
+                    t.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase) &&
+                    typeof(UnityEngine.Component).IsAssignableFrom(t));
+                if (match != null) return match;
             }
             return null;
         }

@@ -73,8 +73,10 @@ namespace UnityCliConnector.Tools
             var primitiveStr = p.Get("primitive", "");
 
             GameObject go;
-            if (!string.IsNullOrEmpty(primitiveStr) && System.Enum.TryParse<PrimitiveType>(primitiveStr, true, out var primitiveType))
+            if (!string.IsNullOrEmpty(primitiveStr))
             {
+                if (!System.Enum.TryParse<PrimitiveType>(primitiveStr, true, out var primitiveType))
+                    return new ErrorResponse($"Invalid primitive type: '{primitiveStr}'. Use: Cube, Sphere, Capsule, Cylinder, Plane, Quad");
                 go = GameObject.CreatePrimitive(primitiveType);
                 go.name = name;
             }
@@ -83,9 +85,14 @@ namespace UnityCliConnector.Tools
                 go = new GameObject(name);
             }
 
-            SetParent(go, p);
-            ApplyTransform(go, p);
-            ApplyTagLayer(go, p);
+            var parentError = SetParent(go, p);
+            if (parentError != null) { Object.DestroyImmediate(go); return parentError; }
+
+            var transformError = ApplyTransform(go, p);
+            if (transformError != null) { Object.DestroyImmediate(go); return transformError; }
+
+            var tagLayerError = ApplyTagLayer(go, p);
+            if (tagLayerError != null) { Object.DestroyImmediate(go); return tagLayerError; }
 
             Undo.RegisterCreatedObjectUndo(go, $"Create {name}");
             return new SuccessResponse($"Created '{go.name}'", GetGameObjectInfo(go));
@@ -118,16 +125,18 @@ namespace UnityCliConnector.Tools
             Undo.RecordObject(go.transform, $"Modify {go.name}");
             Undo.RecordObject(go, $"Modify {go.name}");
 
-            ApplyTransform(go, p);
-            ApplyTagLayer(go, p);
+            var transformError = ApplyTransform(go, p);
+            if (transformError != null) return transformError;
+
+            var tagLayerError = ApplyTagLayer(go, p);
+            if (tagLayerError != null) return tagLayerError;
 
             var activeStr = p.Get("active", "");
             if (!string.IsNullOrEmpty(activeStr))
                 go.SetActive(activeStr.ToLowerInvariant() == "true");
 
-            var newParent = p.Get("parent", "");
-            if (!string.IsNullOrEmpty(newParent))
-                SetParent(go, p);
+            var parentError = SetParent(go, p);
+            if (parentError != null) return parentError;
 
             EditorUtility.SetDirty(go);
             return new SuccessResponse($"Modified '{go.name}'", GetGameObjectInfo(go));
@@ -138,6 +147,10 @@ namespace UnityCliConnector.Tools
             var name = p.Get("name", "");
             var tag = p.Get("tag", "");
             var layer = p.Get("layer", "");
+
+            if (string.IsNullOrEmpty(name) && string.IsNullOrEmpty(tag) && string.IsNullOrEmpty(layer))
+                return new ErrorResponse("At least one search criterion required: name, tag, or layer.");
+
             var results = new List<object>();
 
             var allObjects = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
@@ -219,42 +232,65 @@ namespace UnityCliConnector.Tools
             return all.FirstOrDefault(g => g.name == path);
         }
 
-        private static void SetParent(GameObject go, ToolParams p)
+        private static object SetParent(GameObject go, ToolParams p)
         {
             var parentPath = p.Get("parent", "");
-            if (string.IsNullOrEmpty(parentPath)) return;
+            if (string.IsNullOrEmpty(parentPath)) return null;
             var parent = GameObject.Find(parentPath);
-            if (parent != null)
-                go.transform.SetParent(parent.transform, false);
+            if (parent == null)
+                return new ErrorResponse($"Parent GameObject not found: '{parentPath}'");
+            go.transform.SetParent(parent.transform, false);
+            return null;
         }
 
-        private static void ApplyTransform(GameObject go, ToolParams p)
+        private static object ApplyTransform(GameObject go, ToolParams p)
         {
             var pos = p.Get("position", "");
-            if (!string.IsNullOrEmpty(pos) && TryParseVector3(pos, out var posVec))
+            if (!string.IsNullOrEmpty(pos))
+            {
+                if (!TryParseVector3(pos, out var posVec))
+                    return new ErrorResponse($"Invalid position format: '{pos}'. Expected 'x,y,z' with numeric values.");
                 go.transform.localPosition = posVec;
+            }
 
             var rot = p.Get("rotation", "");
-            if (!string.IsNullOrEmpty(rot) && TryParseVector3(rot, out var rotVec))
+            if (!string.IsNullOrEmpty(rot))
+            {
+                if (!TryParseVector3(rot, out var rotVec))
+                    return new ErrorResponse($"Invalid rotation format: '{rot}'. Expected 'x,y,z' with numeric values.");
                 go.transform.localEulerAngles = rotVec;
+            }
 
             var scale = p.Get("scale", "");
-            if (!string.IsNullOrEmpty(scale) && TryParseVector3(scale, out var scaleVec))
+            if (!string.IsNullOrEmpty(scale))
+            {
+                if (!TryParseVector3(scale, out var scaleVec))
+                    return new ErrorResponse($"Invalid scale format: '{scale}'. Expected 'x,y,z' with numeric values.");
                 go.transform.localScale = scaleVec;
+            }
+
+            return null;
         }
 
-        private static void ApplyTagLayer(GameObject go, ToolParams p)
+        private static object ApplyTagLayer(GameObject go, ToolParams p)
         {
             var tag = p.Get("tag", "");
             if (!string.IsNullOrEmpty(tag))
-                go.tag = tag;
+            {
+                try { go.tag = tag; }
+                catch (UnityException) { return new ErrorResponse($"Invalid tag: '{tag}'. Tag must be defined in the Tag Manager."); }
+            }
 
             var layer = p.Get("layer", "");
             if (!string.IsNullOrEmpty(layer))
             {
                 int layerIndex = LayerMask.NameToLayer(layer);
-                if (layerIndex >= 0) go.layer = layerIndex;
+                if (layerIndex < 0)
+                    return new ErrorResponse($"Invalid layer: '{layer}'. Layer must be defined in the Tag Manager.");
+                go.layer = layerIndex;
             }
+
+            return null;
         }
 
         private static object GetGameObjectInfo(GameObject go)

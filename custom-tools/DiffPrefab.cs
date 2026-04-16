@@ -42,8 +42,10 @@ namespace UnityCliConnector.Tools
             "m_LocalEulerAnglesHint"
         };
 
+        // Strips leading parenthesized prefixes like "(Clone) " or "(1) " that Unity appends to instantiated object names
         private static readonly Regex PrefixPattern = new Regex(@"^\([^)]+\)\s*", RegexOptions.Compiled);
 
+        // Cap total diff entries to avoid overwhelming output on large prefabs with many differences
         private const int MaxEntries = 500;
 
         public static object HandleCommand(JObject @params)
@@ -72,7 +74,8 @@ namespace UnityCliConnector.Tools
 
             var subtree = p.Get("subtree", "");
             int depth = p.GetInt("depth", 3) ?? 3;
-            if (depth < 0) depth = 3;
+            if (depth < 0 || depth > 10)
+                return new ErrorResponse("Depth must be between 0 and 10.");
             bool diffOnly = p.GetBool("diff_only", true);
             var mappingStr = p.Get("mapping", "");
 
@@ -221,9 +224,8 @@ namespace UnityCliConnector.Tools
         {
             var diffs = new List<object>();
 
-            string tagA, tagB;
-            try { tagA = a.tag; } catch { tagA = "(invalid)"; }
-            try { tagB = b.tag; } catch { tagB = "(invalid)"; }
+            string tagA = SafeGetTag(a);
+            string tagB = SafeGetTag(b);
 
             if (a.layer != b.layer)
                 diffs.Add(new { field = "layer", value_a = LayerMask.LayerToName(a.layer), value_b = LayerMask.LayerToName(b.layer) });
@@ -659,6 +661,12 @@ namespace UnityCliConnector.Tools
         #endregion
 
         #region Utility
+
+        private static string SafeGetTag(GameObject go)
+        {
+            try { return go.tag; }
+            catch { return "(invalid)"; }
+        }
 
         private static Transform FindTransformByName(Transform root, string name)
         {

@@ -143,8 +143,9 @@ namespace UnityCliConnector.Tools
             var prop = so.FindProperty(propResult.Value);
             if (prop == null) return new ErrorResponse($"Property '{propResult.Value}' not found");
 
-            if (!SetPropertyValue(prop, valueResult.Value))
-                return new ErrorResponse($"Failed to set '{propResult.Value}' to '{valueResult.Value}'");
+            var setError = SetPropertyValue(prop, valueResult.Value);
+            if (setError != null)
+                return new ErrorResponse(setError);
 
             so.ApplyModifiedProperties();
             EditorUtility.SetDirty(component);
@@ -172,7 +173,7 @@ namespace UnityCliConnector.Tools
                         if (types.Count >= 50) break;
                     }
                 }
-                catch { }
+                catch (ReflectionTypeLoadException) { }
                 if (types.Count >= 50) break;
             }
 
@@ -210,10 +211,12 @@ namespace UnityCliConnector.Tools
                         typeof(Component).IsAssignableFrom(t));
                     if (type != null) return type;
                 }
-                catch { }
+                catch (ReflectionTypeLoadException) { }
             }
             return null;
         }
+
+        private const int MaxSerializedProperties = 50;
 
         private static object GetSerializedProperties(Component comp)
         {
@@ -225,7 +228,7 @@ namespace UnityCliConnector.Tools
             do
             {
                 props[iter.propertyPath] = GetPropertyValue(iter);
-                if (++count > 30) break;
+                if (++count >= MaxSerializedProperties) break;
             } while (iter.NextVisible(false));
             return props;
         }
@@ -253,7 +256,7 @@ namespace UnityCliConnector.Tools
             }
         }
 
-        private static bool SetPropertyValue(SerializedProperty prop, string value)
+        private static string SetPropertyValue(SerializedProperty prop, string value)
         {
             try
             {
@@ -261,37 +264,59 @@ namespace UnityCliConnector.Tools
                 {
                     case SerializedPropertyType.Integer:
                         prop.intValue = int.Parse(value);
-                        return true;
+                        return null;
                     case SerializedPropertyType.Boolean:
                         prop.boolValue = bool.Parse(value);
-                        return true;
+                        return null;
                     case SerializedPropertyType.Float:
                         prop.floatValue = float.Parse(value);
-                        return true;
+                        return null;
                     case SerializedPropertyType.String:
                         prop.stringValue = value;
-                        return true;
+                        return null;
                     case SerializedPropertyType.Enum:
                         var idx = Array.IndexOf(prop.enumNames, value);
-                        if (idx >= 0) { prop.enumValueIndex = idx; return true; }
-                        if (int.TryParse(value, out var enumInt)) { prop.enumValueIndex = enumInt; return true; }
-                        return false;
+                        if (idx >= 0) { prop.enumValueIndex = idx; return null; }
+                        if (int.TryParse(value, out var enumInt)) { prop.enumValueIndex = enumInt; return null; }
+                        return $"Invalid enum value '{value}'. Valid values: {string.Join(", ", prop.enumNames)}";
+                    case SerializedPropertyType.Vector2:
+                        var v2 = ParseFloats(value, 2);
+                        if (v2 == null) return "Vector2 requires 2 comma-separated floats (e.g. '1.0,2.0').";
+                        prop.vector2Value = new Vector2(v2[0], v2[1]);
+                        return null;
                     case SerializedPropertyType.Vector3:
-                        var parts = value.Split(',');
-                        if (parts.Length == 3)
-                        {
-                            prop.vector3Value = new Vector3(
-                                float.Parse(parts[0].Trim()),
-                                float.Parse(parts[1].Trim()),
-                                float.Parse(parts[2].Trim()));
-                            return true;
-                        }
-                        return false;
+                        var v3 = ParseFloats(value, 3);
+                        if (v3 == null) return "Vector3 requires 3 comma-separated floats (e.g. '1.0,2.0,3.0').";
+                        prop.vector3Value = new Vector3(v3[0], v3[1], v3[2]);
+                        return null;
+                    case SerializedPropertyType.Vector4:
+                        var v4 = ParseFloats(value, 4);
+                        if (v4 == null) return "Vector4 requires 4 comma-separated floats (e.g. '1.0,2.0,3.0,4.0').";
+                        prop.vector4Value = new Vector4(v4[0], v4[1], v4[2], v4[3]);
+                        return null;
+                    case SerializedPropertyType.Color:
+                        var cv = ParseFloats(value, 4);
+                        if (cv == null) return "Color requires 4 comma-separated floats for r,g,b,a (e.g. '1.0,0.5,0.0,1.0').";
+                        prop.colorValue = new Color(cv[0], cv[1], cv[2], cv[3]);
+                        return null;
                     default:
-                        return false;
+                        return $"Unsupported property type: {prop.propertyType}";
                 }
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                return $"Failed to parse '{value}' as {prop.propertyType}: {ex.Message}";
+            }
+        }
+
+        private static float[] ParseFloats(string value, int expected)
+        {
+            var parts = value.Split(',');
+            if (parts.Length != expected) return null;
+            var result = new float[expected];
+            for (int i = 0; i < expected; i++)
+                result[i] = float.Parse(parts[i].Trim());
+            return result;
         }
     }
 }
