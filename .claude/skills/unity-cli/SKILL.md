@@ -1,142 +1,113 @@
 ---
 name: unity-cli
-description: Use when interacting with a running Unity Editor from the shell - discovering instances, listing available tools, calling Editor commands (console, screenshots, prefab diffs, etc.). Skip grep; tools are discovered at runtime via `unity-cli list`.
+description: Use when calling a running Unity Editor from the shell (console, screenshots, exec C#, custom tools). Skip code grep — tools are discovered live via `unity-cli list`.
 ---
 
-# unity-cli — How to Use
+# unity-cli
 
-A CLI that talks to a running Unity Editor over localhost HTTP.
-The CLI is a thin forwarder; all commands execute inside Unity.
+CLI forwards commands over localhost HTTP to a running Unity Editor. All logic lives in the Editor (`[UnityCliTool]` static classes).
 
 ## Golden Rule
 
-**Tool list is dynamic.** Never guess tool names or parameters from memory.
-Always run `unity-cli list` to get the authoritative schema for the currently running Editor. Project-specific custom tools appear there too.
+**Never guess tool names/params.** Run `unity-cli list` — it's the authoritative schema for the Editor currently loaded, including project-specific custom tools.
 
-## Three-Step Workflow
-
-```bash
-unity-cli status          # 1. Confirm an Editor is running and find its port
-unity-cli list            # 2. Get JSON schema of all available tools
-unity-cli <tool> [flags]  # 3. Call a tool
-```
-
-If `status` shows no instance: Unity isn't running, or the connector package isn't installed in that project.
-
-## Call Syntax
+## Workflow
 
 ```bash
-unity-cli <tool_name> --<param_name> <value> [--<param_name> <value> ...]
+unity-cli status                            # live instances + ports
+unity-cli list                              # JSON array of all tools
+unity-cli <tool> --<snake_key> <value> ...  # call
 ```
 
-- Tool name: snake_case (from `list` output's `name` field)
-- Parameter name: snake_case (from `list` output's `parameters[].name`)
-- Boolean params: bare flag (`--clear`) or `--clear true`
-- Multi-word values: quote them
+No `status` output ⇒ Unity not running or connector package not installed.
 
-Example:
-```bash
-unity-cli console --type error --lines 20 --stacktrace user
-unity-cli editor_screenshot --path /tmp/shot.png
-```
+## Syntax rules
 
-## Multiple Unity Instances
+- Tool + param names are snake_case (from `list`)
+- Bool params: bare flag or `--flag true`
+- Stdin: `unity-cli exec - <<'EOF' ... EOF`
 
-Selection order when multiple Editors are running:
+## Multi-instance selection
 
-1. `--port <N>` — explicit port (from `status`)
-2. `--project <substring>` — matches `projectPath` substring
-3. **Auto by CWD**: if the current working directory is inside a project's path, that instance wins
+1. `--port N` (from `status`)
+2. `--project <substring>` matches `projectPath`
+3. **CWD inside projectPath** → that instance (auto)
 4. Most recent timestamp
 
-Use `status` to see all live instances.
-
-## Global Flags
+## Global flags
 
 | Flag | Purpose |
-|------|---------|
-| `--port <N>` | Pin to a specific Unity instance |
-| `--project <substr>` | Pick instance by project path substring |
-| `--timeout <ms>` | Request timeout (default 120000) |
-| `--help` / `-h` | Help for any subcommand |
+|---|---|
+| `--port N` | Pin instance |
+| `--project S` | Match by path substring |
+| `--timeout MS` | Default 120000 |
+| `--help` / `-h` | Any subcommand |
 
-## Response Schema
+## Built-in subcommands (non-forwarding)
 
-The Unity HTTP server returns a `{success, message, data}` envelope.
-**The CLI unwraps it on success and prints only `data`** — so `unity-cli list` outputs a bare JSON array, `unity-cli console` outputs a string or array, etc.
+`editor`, `test`, `exec`, `status`, `update`, `version`, `help`. Everything else is forwarded as-is.
 
-- On success: stdout = the `data` field (array, object, or string), pretty-printed
-- On failure: stderr = `Error: <message>` (and `Details: <data>` if present), exit code 1
-- `data == null` prints nothing (message-only success — e.g. `unity-cli refresh_unity`)
-- Some commands (e.g. entering play mode) close the connection early — CLI reports "... sent (connection closed before response)" on stdout
-- `test` command streams / returns structured test results
+## Output contract
 
-Pipe directly through `jq` — no unwrapping needed:
-```bash
-unity-cli list | jq '.[].name'   # works, because stdout is already the array
-```
+CLI unwraps Unity's `{success, message, data}` envelope:
 
-## Built-in Categories (fast path)
+- **Success** → stdout = `data` (pretty JSON, or raw string), exit 0
+- **Failure** → stderr = `Error: <message>` (+ `Details: <data>`), exit 1
+- `data == null` → silent success (e.g. `refresh_unity`)
+- Early-closed connections (play mode entry) → `"... sent (connection closed before response)"`
 
-These have dedicated CLI subcommands (not generic forwarding):
+Pipe `list` directly: `unity-cli list | jq '.[].name'`.
+
+## Useful jq one-liners
 
 ```bash
-unity-cli editor <subcommand>   # Editor lifecycle operations
-unity-cli test <subcommand>     # Run/query tests
-unity-cli exec <csharp-code>    # Execute C# in Editor (stdin supported: echo ... | unity-cli exec -)
-unity-cli status                # Instance discovery
-unity-cli update                # Self-update
-unity-cli version
-```
-
-Everything else is forwarded as-is to the Unity `command` endpoint.
-
-## Common Pitfalls
-
-- **Compile errors in Unity** → commands fail or timeout. Fix scripts first (check `unity-cli console --type error`).
-- **Domain reload in progress** → transient timeout. Retry.
-- **Stale `status` entry** → CLI auto-cleans dead PIDs on next scan.
-- **Browser Origin header** → rejected with 403. CLI path is fine; don't curl from a browser.
-- **CORS / OPTIONS** → blocked. This is HTTP-only, not a web API.
-- **Concurrent callers** → serialized by Unity (`SemaphoreSlim`). Expect queuing, not parallelism.
-
-## Discovering What Exists (Instead of Grepping)
-
-Don't search the unity-cli repo or the Editor package source to find tool names.
-`list` output is the source of truth — it reflects the exact build currently loaded, including project-specific custom `[UnityCliTool]` classes.
-
-```bash
-# Find tools by name substring
 unity-cli list | jq '.[] | select(.name | contains("prefab"))'
-
-# Inspect one tool's parameters
 unity-cli list | jq '.[] | select(.name == "manage_editor")'
-
-# Just the names
 unity-cli list | jq -r '.[].name'
-
-# Tools grouped by the `group` field
 unity-cli list | jq 'group_by(.group) | map({group: .[0].group, tools: map(.name)})'
 ```
 
-## Authoring New Tools (Unity-side, quick reference)
+## Pitfalls
 
-In the Unity project, a custom tool is any public static class with:
+- **Compile errors** → commands fail/timeout. Check `unity-cli console --type error` first.
+- **Domain reload** → transient timeout. Retry.
+- **Browser Origin header** / CORS → 403. CLI path is fine.
+- **Concurrent callers** → serialized by `SemaphoreSlim` (queued, not parallel).
+
+### Console filter toggle gotcha
+
+`unity-cli console --type warning|log` may return **empty arrays even when entries exist** — the tool calls `UnityEditor.LogEntries.GetEntryCount()`, which respects the **Console window's filter toggles**. If the user has Warning or Info toggled off, the API hides them.
+
+Pre-enable flags before reading:
+
+```bash
+unity-cli exec - <<'EOF'
+var t = System.Type.GetType("UnityEditor.LogEntries,UnityEditor");
+var m = t.GetMethod("SetConsoleFlag",
+    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+m.Invoke(null, new object[] { 256, true });   // LogLevelWarning
+m.Invoke(null, new object[] { 512, true });   // LogLevelLog
+// 128 = LogLevelError (usually on by default)
+EOF
+```
+
+## Authoring custom tools (Unity-side)
+
+Any public static class loaded in an Editor assembly:
 
 ```csharp
-[UnityCliTool(Name = "my_tool", Description = "What it does.")]
+[UnityCliTool(Name = "my_tool", Description = "...")]
 public static class MyTool
 {
     public class Parameters
     {
-        [ToolParameter("What this flag does", Required = true)]
+        [ToolParameter("what this flag does", Required = true)]
         public string TargetPath { get; set; }
     }
-
     public static object HandleCommand(JObject @params) { ... }
 }
 ```
 
-- Name auto-derives from class → snake_case if `Name` omitted.
-- Class must be in an Editor-loaded assembly (any asmdef works).
-- Appears in `list` after next compile. Zero registration code.
+- Name auto-derives to snake_case from class if omitted.
+- Any asmdef works (Editor-loaded).
+- Appears in `list` after next compile. Zero registration.
