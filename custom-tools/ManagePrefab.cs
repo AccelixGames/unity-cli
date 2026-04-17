@@ -175,7 +175,7 @@ namespace UnityCliConnector.Tools
         private static UnityEngine.GameObject FindGameObject(string name)
         {
             return UnityEngine.GameObject.Find(name)
-                   ?? Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None)
+                   ?? UnityEngine.Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None)
                        .FirstOrDefault(g => g.name == name);
         }
     }
