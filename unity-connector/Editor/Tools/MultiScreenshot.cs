@@ -107,7 +107,7 @@ namespace UnityCliConnector.Tools
                         rt = new RenderTexture(width, height, 24);
                         if (!rt.Create())
                         {
-                            Object.DestroyImmediate(rt);
+                            UnityEngine.Object.DestroyImmediate(rt);
                             return new ErrorResponse($"Failed to create RenderTexture ({width}x{height}) for angle '{angle.Name}'.");
                         }
 
@@ -128,8 +128,8 @@ namespace UnityCliConnector.Tools
                     {
                         camera.targetTexture = null;
                         RenderTexture.active = null;
-                        if (tex != null) Object.DestroyImmediate(tex);
-                        if (rt != null) Object.DestroyImmediate(rt);
+                        if (tex != null) UnityEngine.Object.DestroyImmediate(tex);
+                        if (rt != null) UnityEngine.Object.DestroyImmediate(rt);
                     }
                 }
             }
