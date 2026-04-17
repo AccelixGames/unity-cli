@@ -63,12 +63,12 @@ unity-cli update --check
 Add the Unity Connector package via **Package Manager → Add package from git URL**:
 
 ```
-https://github.com/youngwoocho02/unity-cli.git?path=unity-connector
+https://github.com/AccelixGames/unity-cli.git?path=unity-connector
 ```
 
 Or add directly to `Packages/manifest.json`:
 ```json
-"com.youngwoocho02.unity-cli-connector": "https://github.com/youngwoocho02/unity-cli.git?path=unity-connector"
+"com.accelixgames.unity-cli-connector": "https://github.com/AccelixGames/unity-cli.git?path=unity-connector"
 ```
 
 To pin a specific version, append a tag to the URL (e.g. `#v0.2.21`).
