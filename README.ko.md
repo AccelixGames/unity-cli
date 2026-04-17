@@ -63,12 +63,12 @@ unity-cli update --check
 **Package Manager → Add package from git URL**에서 추가:
 
 ```
-https://github.com/AccelixGames/unity-cli.git?path=unity-connector
+https://github.com/youngwoocho02/unity-cli.git?path=unity-connector
 ```
 
 또는 `Packages/manifest.json`에 직접 추가:
 ```json
-"com.accelixgames.unity-cli-connector": "https://github.com/AccelixGames/unity-cli.git?path=unity-connector"
+"com.youngwoocho02.unity-cli-connector": "https://github.com/youngwoocho02/unity-cli.git?path=unity-connector"
 ```
 
 특정 버전을 고정하려면 URL 끝에 태그를 추가하세요 (예: `#v0.2.21`).
