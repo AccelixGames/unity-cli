@@ -62,15 +62,19 @@ Use `status` to see all live instances.
 
 ## Response Schema
 
-All responses are JSON:
-```json
-{ "success": true,  "message": "...", "data": <any> }
-{ "success": false, "message": "..." }
-```
+The Unity HTTP server returns a `{success, message, data}` envelope.
+**The CLI unwraps it on success and prints only `data`** — so `unity-cli list` outputs a bare JSON array, `unity-cli console` outputs a string or array, etc.
 
-- `data` may be omitted on failure or simple commands
+- On success: stdout = the `data` field (array, object, or string), pretty-printed
+- On failure: stderr = `Error: <message>` (and `Details: <data>` if present), exit code 1
+- `data == null` prints nothing (message-only success — e.g. `unity-cli refresh_unity`)
+- Some commands (e.g. entering play mode) close the connection early — CLI reports "... sent (connection closed before response)" on stdout
 - `test` command streams / returns structured test results
-- Some commands (e.g. entering play mode) close the connection early — CLI reports success with "connection closed before response"
+
+Pipe directly through `jq` — no unwrapping needed:
+```bash
+unity-cli list | jq '.[].name'   # works, because stdout is already the array
+```
 
 ## Built-in Categories (fast path)
 
@@ -102,11 +106,17 @@ Don't search the unity-cli repo or the Editor package source to find tool names.
 `list` output is the source of truth — it reflects the exact build currently loaded, including project-specific custom `[UnityCliTool]` classes.
 
 ```bash
-# Find prefab-related tools
-unity-cli list | jq '.data[] | select(.name | contains("prefab"))'
+# Find tools by name substring
+unity-cli list | jq '.[] | select(.name | contains("prefab"))'
 
 # Inspect one tool's parameters
-unity-cli list | jq '.data[] | select(.name == "manage_component")'
+unity-cli list | jq '.[] | select(.name == "manage_editor")'
+
+# Just the names
+unity-cli list | jq -r '.[].name'
+
+# Tools grouped by the `group` field
+unity-cli list | jq 'group_by(.group) | map({group: .[0].group, tools: map(.name)})'
 ```
 
 ## Authoring New Tools (Unity-side, quick reference)
